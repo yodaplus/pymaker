@@ -154,7 +154,8 @@ class DssDeployment:
 
     NETWORKS = {
         "1": "mainnet",
-        "42": "kovan"
+        "42": "kovan",
+        "51": "apothem"
     }
 
     class Config:

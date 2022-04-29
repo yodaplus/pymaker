@@ -113,10 +113,6 @@ class Lifecycle:
         else:
             self.logger.info(f"Keeper initializing")
 
-        # Wait for sync and peers
-        if self.web3 and self.do_wait_for_sync:
-            self._wait_for_init()
-
         # Initial delay
         if self.delay > 0:
             self.logger.info(f"Waiting for {self.delay} seconds of initial delay...")
@@ -327,26 +323,18 @@ class Lifecycle:
             self._last_block_time = datetime.datetime.now(tz=pytz.UTC)
             block = self.web3.eth.getBlock(block_hash)
             block_number = block['number']
-            if not self.web3.eth.syncing:
-                max_block_number = self.web3.eth.blockNumber
-                if block_number >= max_block_number:
-                    def on_start():
-                        self.logger.debug(f"Processing block #{block_number} ({block_hash.hex()})")
+            def on_start():
+                self.logger.debug(f"Processing block #{block_number} ({block_hash.hex()})")
 
-                    def on_finish():
-                        self.logger.debug(f"Finished processing block #{block_number} ({block_hash.hex()})")
+            def on_finish():
+                self.logger.debug(f"Finished processing block #{block_number} ({block_hash.hex()})")
 
-                    if not self.terminated_internally and not self.terminated_externally and not self.fatal_termination:
-                        if not self._on_block_callback.trigger(on_start, on_finish):
-                            self.logger.debug(f"Ignoring block #{block_number} ({block_hash.hex()}),"
-                                              f" as previous callback is still running")
-                    else:
-                        self.logger.debug(f"Ignoring block #{block_number} as keeper is already terminating")
-                else:
+            if not self.terminated_internally and not self.terminated_externally and not self.fatal_termination:
+                if not self._on_block_callback.trigger(on_start, on_finish):
                     self.logger.debug(f"Ignoring block #{block_number} ({block_hash.hex()}),"
-                                      f" as there is already block #{max_block_number} available")
+                                        f" as previous callback is still running")
             else:
-                self.logger.info(f"Ignoring block #{block_number} ({block_hash.hex()}), as the node is syncing")
+                self.logger.debug(f"Ignoring block #{block_number} as keeper is already terminating")
 
         def new_block_watch():
             event_filter = self.web3.eth.filter('latest')
@@ -496,7 +484,6 @@ class Lifecycle:
             # TODO the same thing could possibly happen if we watch any event other than
             # TODO a new block. if that happens, we have no reliable way of detecting it now.
             if self._last_block_time and (datetime.datetime.now(tz=pytz.UTC) - self._last_block_time).total_seconds() > 300:
-                if not self.web3.eth.syncing:
-                    self.logger.fatal("No new blocks received for 300 seconds, the keeper will terminate")
-                    self.fatal_termination = True
-                    break
+                self.logger.fatal("No new blocks received for 300 seconds, the keeper will terminate")
+                self.fatal_termination = True
+                break
